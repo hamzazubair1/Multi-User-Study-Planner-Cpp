@@ -1,112 +1,214 @@
-#include <iostream>   // For input/output
-#include <fstream>    // For file handling
-#include <string>     // For string data type
+#include <iostream>
+#include <fstream>
+#include <string>
 
 using namespace std;
 
-// Maximum number of tasks allowed
-const int MAX_TASKS = 100;
+// ================= GLOBAL =================
+string currentUser;
+string taskFileName;
 
-// Arrays to store task information
+const int MAX_TASKS = 100;
 string taskTitle[MAX_TASKS];
 string subjectName[MAX_TASKS];
 int dayDue[MAX_TASKS];
 int monthDue[MAX_TASKS];
 int priorityLevel[MAX_TASKS];
-int completed[MAX_TASKS];   // 0 = Pending, 1 = Completed
+int completed[MAX_TASKS];
+int taskCount = 0;
 
-int taskCount = 0;          // Total number of tasks
+// ================= FUNCTION DECLARATIONS =================
+bool loginOrRegister();
+bool login();
+void registerUser();
+bool userExists(string id);
+void changePassword();
 
-// Function declarations
 void addTask();
 void viewAllTasks();
 void viewPendingTasks();
 void markTaskCompleted();
 void suggestTask();
-void saveToFile(bool showMessage = true);
-void loadFromFile(bool showMessage = false);
+void saveToFile(bool msg = true);
+void loadFromFile(bool msg = false);
 
+// ================= MAIN =================
 int main() {
-    int choice;
 
-    // Load tasks from file when program starts (without message)
+    if (!loginOrRegister()) {
+        cout << "Exiting program...\n";
+        return 0;
+    }
+
+    taskFileName = "tasks_" + currentUser + ".txt";
     loadFromFile(false);
 
+    int choice;
     do {
-        // Main menu
-        cout << "\n=========================\n";
-        cout << "   Simple Study Planner  \n";
-        cout << "=========================\n";
-        cout << "1. Add new task\n";
-        cout << "2. View all tasks\n";
-        cout << "3. View pending tasks\n";
-        cout << "4. Mark task as completed\n";
-        cout << "5. Suggest next task\n";
-        cout << "6. Save tasks to file\n";
-        cout << "7. Load tasks from file\n";
+        cout << "\n===== STUDY PLANNER (" << currentUser << ") =====\n";
+        cout << "1. Add Task\n";
+        cout << "2. View All Tasks (Full Details)\n";
+        cout << "3. View Pending Tasks (Full Details)\n";
+        cout << "4. Mark Task Completed\n";
+        cout << "5. Suggest Next Task\n";
+        cout << "6. Change Password\n";
+        cout << "7. Save Tasks\n";
         cout << "8. Exit\n";
-        cout << "Enter your choice: ";
+        cout << "Enter choice: ";
         cin >> choice;
 
-        // Input validation
         if (cin.fail()) {
             cin.clear();
             cin.ignore(1000, '\n');
             choice = 0;
         }
 
-        // Menu selection
         switch (choice) {
         case 1: addTask(); break;
         case 2: viewAllTasks(); break;
         case 3: viewPendingTasks(); break;
         case 4: markTaskCompleted(); break;
         case 5: suggestTask(); break;
-        case 6: saveToFile(true); break;
-        case 7: loadFromFile(true); break;
-        case 8: cout << "Exiting program...\n"; break;
-        default: cout << "Invalid choice. Try again.\n";
+        case 6: changePassword(); break;
+        case 7: saveToFile(true); break;
+        case 8: cout << "Goodbye!\n"; break;
+        default: cout << "Invalid choice!\n";
         }
-
     } while (choice != 8);
 
-    // Save tasks automatically before exiting
     saveToFile(false);
-
     return 0;
 }
 
-// Function to add a new task
-void addTask() {
-    if (taskCount >= MAX_TASKS) {
-        cout << "Task list is full.\n";
+// ================= LOGIN / REGISTER =================
+bool loginOrRegister() {
+    int choice;
+    cout << "1. Login\n2. Register\nChoose: ";
+    cin >> choice;
+
+    if (choice == 1)
+        return login();
+    else if (choice == 2) {
+        registerUser();
+        return true;
+    }
+    return false;
+}
+
+bool login() {
+    ifstream in("users.txt");
+    if (!in) {
+        cout << "No users found. Please register first.\n";
+        registerUser();
+        return true;
+    }
+
+    string id, pass, fileID, filePass;
+    cout << "Enter ID: ";
+    cin >> id;
+    cout << "Enter Password: ";
+    cin >> pass;
+
+    while (in >> fileID >> filePass) {
+        if (id == fileID) {
+            if (pass == filePass) {
+                currentUser = id;
+                cout << "Login successful!\n";
+                return true;
+            }
+            else {
+                cout << "Wrong password!\n";
+                return false;
+            }
+        }
+    }
+
+    cout << "ID not found. Please register first.\n";
+    registerUser();
+    return true;
+}
+
+bool userExists(string id) {
+    ifstream in("users.txt");
+    string fileID, filePass;
+    while (in >> fileID >> filePass) {
+        if (fileID == id) {
+            in.close();
+            return true;
+        }
+    }
+    in.close();
+    return false;
+}
+
+void registerUser() {
+    string id, pass;
+    cout << "Create ID: ";
+    cin >> id;
+
+    if (userExists(id)) {
+        cout << "Account already exists! Redirecting to login...\n";
+        login();
         return;
     }
 
-    cin.ignore(1000, '\n');
+    cout << "Create Password: ";
+    cin >> pass;
 
-    cout << "Enter task title: ";
-    getline(cin, taskTitle[taskCount]);
+    ofstream out("users.txt", ios::app);
+    out << id << " " << pass << endl;
+    out.close();
 
-    cout << "Enter subject name: ";
-    getline(cin, subjectName[taskCount]);
-
-    cout << "Enter due day (1-31): ";
-    cin >> dayDue[taskCount];
-
-    cout << "Enter due month (1-12): ";
-    cin >> monthDue[taskCount];
-
-    cout << "Enter priority (1=High, 2=Medium, 3=Low): ";
-    cin >> priorityLevel[taskCount];
-
-    completed[taskCount] = 0;   // Task is pending by default
-    taskCount++;
-
-    cout << "Task added successfully.\n";
+    currentUser = id;
+    cout << "Registration successful!\n";
 }
 
-// Function to display all tasks
+void changePassword() {
+    ifstream in("users.txt");
+    ofstream out("temp.txt");
+
+    string id, pass, newPass;
+    cout << "Enter new password: ";
+    cin >> newPass;
+
+    while (in >> id >> pass) {
+        if (id == currentUser)
+            out << id << " " << newPass << endl;
+        else
+            out << id << " " << pass << endl;
+    }
+
+    in.close();
+    out.close();
+    remove("users.txt");
+    rename("temp.txt", "users.txt");
+
+    cout << "Password changed successfully!\n";
+}
+
+// ================= TASK FUNCTIONS =================
+void addTask() {
+    if (taskCount >= MAX_TASKS) {
+        cout << "Task limit reached!\n";
+        return;
+    }
+
+    cin.ignore();
+    cout << "Task Title: ";
+    getline(cin, taskTitle[taskCount]);
+    cout << "Subject: ";
+    getline(cin, subjectName[taskCount]);
+    cout << "Due Day: ";
+    cin >> dayDue[taskCount];
+    cout << "Due Month: ";
+    cin >> monthDue[taskCount];
+    cout << "Priority (1=High, 2=Medium, 3=Low): ";
+    cin >> priorityLevel[taskCount];
+
+    completed[taskCount++] = 0;
+}
+
+// FULL DETAILS – ALL TASKS
 void viewAllTasks() {
     if (taskCount == 0) {
         cout << "No tasks available.\n";
@@ -115,26 +217,36 @@ void viewAllTasks() {
 
     for (int i = 0; i < taskCount; i++) {
         cout << "\nTask No: " << i + 1 << endl;
-        cout << "Title    : " << taskTitle[i] << endl;
-        cout << "Subject  : " << subjectName[i] << endl;
-        cout << "Due Date : " << dayDue[i] << "/" << monthDue[i] << endl;
-        cout << "Priority : " << priorityLevel[i] << endl;
-        cout << "Status   : "
+        cout << "Title   : " << taskTitle[i] << endl;
+        cout << "Subject : " << subjectName[i] << endl;
+        cout << "Due Date: " << dayDue[i] << "/" << monthDue[i] << endl;
+
+        cout << "Priority: ";
+        if (priorityLevel[i] == 1) cout << "High\n";
+        else if (priorityLevel[i] == 2) cout << "Medium\n";
+        else cout << "Low\n";
+
+        cout << "Status  : "
             << (completed[i] ? "Completed" : "Pending") << endl;
     }
 }
 
-// Function to display only pending tasks
+// FULL DETAILS – PENDING TASKS ONLY
 void viewPendingTasks() {
     bool found = false;
 
     for (int i = 0; i < taskCount; i++) {
-        if (completed[i] == 0) {
+        if (!completed[i]) {
             found = true;
             cout << "\nTask No: " << i + 1 << endl;
             cout << "Title   : " << taskTitle[i] << endl;
             cout << "Subject : " << subjectName[i] << endl;
-            cout << "Due     : " << dayDue[i] << "/" << monthDue[i] << endl;
+            cout << "Due Date: " << dayDue[i] << "/" << monthDue[i] << endl;
+
+            cout << "Priority: ";
+            if (priorityLevel[i] == 1) cout << "High\n";
+            else if (priorityLevel[i] == 2) cout << "Medium\n";
+            else cout << "Low\n";
         }
     }
 
@@ -142,99 +254,75 @@ void viewPendingTasks() {
         cout << "No pending tasks. Well done!\n";
 }
 
-// Function to mark a task as completed
+// OPTION 4 – SHOW ALL TASKS FIRST, THEN MARK
 void markTaskCompleted() {
-    int num;
-
     if (taskCount == 0) {
         cout << "No tasks available.\n";
         return;
     }
 
+    // Show all tasks with full details
     viewAllTasks();
 
+    int n;
     cout << "\nEnter task number to mark completed: ";
-    cin >> num;
+    cin >> n;
 
-    if (num < 1 || num > taskCount) {
+    if (n < 1 || n > taskCount) {
         cout << "Invalid task number.\n";
         return;
     }
 
-    completed[num - 1] = 1;
+    completed[n - 1] = 1;
     cout << "Task marked as completed.\n";
 }
 
-// Function to suggest the next task based on priority and due date
 void suggestTask() {
-    int best = -1;
-
     for (int i = 0; i < taskCount; i++) {
-        if (completed[i] == 0) {
-            if (best == -1 ||
-                priorityLevel[i] < priorityLevel[best] ||
-                (priorityLevel[i] == priorityLevel[best] &&
-                    monthDue[i] < monthDue[best]) ||
-                (priorityLevel[i] == priorityLevel[best] &&
-                    monthDue[i] == monthDue[best] &&
-                    dayDue[i] < dayDue[best])) {
-                best = i;
-            }
+        if (!completed[i]) {
+            cout << "Next Task: " << taskTitle[i] << endl;
+            return;
         }
     }
-
-    if (best == -1) {
-        cout << "No pending tasks.\n";
-    }
-    else {
-        cout << "\nNext Suggested Task:\n";
-        cout << "Title   : " << taskTitle[best] << endl;
-        cout << "Subject : " << subjectName[best] << endl;
-        cout << "Due     : " << dayDue[best] << "/" << monthDue[best] << endl;
-        cout << "Priority: " << priorityLevel[best] << endl;
-    }
+    cout << "No pending tasks!\n";
 }
 
-// Function to save tasks to a file
-void saveToFile(bool showMessage) {
-    ofstream out("tasks.txt");
-
-    if (!out) {
-        if (showMessage) cout << "Error saving file.\n";
-        return;
-    }
-
+// ================= FILE HANDLING =================
+void saveToFile(bool msg) {
+    ofstream out(taskFileName);
     out << taskCount << endl;
 
     for (int i = 0; i < taskCount; i++) {
         out << taskTitle[i] << endl;
         out << subjectName[i] << endl;
-        out << dayDue[i] << " " << monthDue[i] << " "
-            << priorityLevel[i] << " " << completed[i] << endl;
+        out << dayDue[i] << " "
+            << monthDue[i] << " "
+            << priorityLevel[i] << " "
+            << completed[i] << endl;
     }
 
     out.close();
-    if (showMessage) cout << "Tasks saved successfully.\n";
+    if (msg) cout << "Tasks saved successfully.\n";
 }
 
-// Function to load tasks from a file
-void loadFromFile(bool showMessage) {
-    ifstream in("tasks.txt");
-
-    if (!in) {
-        return;
-    }
+void loadFromFile(bool msg) {
+    ifstream in(taskFileName);
+    if (!in) return;
 
     in >> taskCount;
-    in.ignore(1000, '\n');
+    in.ignore();
 
     for (int i = 0; i < taskCount; i++) {
         getline(in, taskTitle[i]);
         getline(in, subjectName[i]);
-        in >> dayDue[i] >> monthDue[i]
-            >> priorityLevel[i] >> completed[i];
-        in.ignore(1000, '\n');
+        in >> dayDue[i]
+            >> monthDue[i]
+            >> priorityLevel[i]
+            >> completed[i];
+        in.ignore();
     }
 
     in.close();
+    if (msg) cout << "Tasks loaded successfully.\n";
 }
+
